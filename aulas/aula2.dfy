@@ -90,13 +90,24 @@ method div(n: int, d: int) returns (q: int, r: nat)
     ensures 0 <= r < abs(d) && q * d + r == n
 {
     q := 0;
-    r := n;
-    while r >= d
+    // distinguish these 2 cases
+    if n > 0 {
+        r := n;
+    } else {
+        r:= -n;
+    }
+    while abs(r) >= d
         decreases abs(r)
+        invariant abs(d) <= abs(r) < abs(n)
         invariant q * d + r == n 
     {
         q := q + 1;
-        r := r - d;
+        // distinguish these 2 cases
+        if n > 0 {
+            r := r - abs(d);
+        } else {
+            r := r + abs(d);
+        }
     }
 }
 
