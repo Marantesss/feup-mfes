@@ -3,3 +3,5 @@
 
 # dafny stuff
 *.bvd
+**.exe
+**.pdb
