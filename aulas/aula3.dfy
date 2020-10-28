@@ -1,173 +1,99 @@
-type T = int // to allow doing new T[capacity], but can be other type 
-
-/* PREDICATE
- - boolean expression
- - is not compiled into the .exe
- - can only be called insise pre and post conditions
-*/
-
-/* PRECIATE METHOD
- - boolean expression
- - is compiled into the .exe
- - can be called anywhere in the program
-*/
-
-/* FUNCTION METHOD
- - 
-*/
-
-/* METHOD
- - 
-*/
-
-/*
-top() é um método de consulta, podemos escrever como method (imperativo) ou como function method (declarativo)
-A vantagem do segundo e que se pode invocar no meio de uma expressao.
-Os metodos em Dafny sao de uso mais restrito, so se podem usar para atribuir uma variavel
-*/
-
-// with {:autocontracts} Dafny checks automatically the class invariant before & after all methods 
-class {:autocontracts} Stack
+// Checks if array 'a' is sorted.
+predicate isSorted(a: array<int>)
+  reads a
 {
-    const elems: array<T>; // immutable (pointer)
-    var size : nat; // used size
-
-    predicate Valid() {
-        size <= elems.Length
-    }
- 
-    constructor (capacity: nat)
-        requires capacity > 0
-        ensures size == 0 && elems.Length == capacity
-    {
-        elems := new T[capacity];
-        size := 0; 
-    }
-
-    predicate method isEmpty()
-        ensures isEmpty() == (size == 0)
-    {
-        size == 0
-    }
- 
-    predicate method isFull()
-    {
-        size == elems.Length
-    }
- 
-    method push(x : T)
-        //modifies this, elems // override with autocontracts injects: this, elems
-        requires !isFull() //requires size < elems.Length
-        // ensures elems[old(size)] == x
-        // ensures size == old(size) + 1
-        // we dont need this anymore thanks to the last expression
-        // ensures forall i :: 0 <= i < old(size) ==> elems[i] == old(elems[i])
-        // becomes
-        // ensures elems[..old(size)] == old(elems[..size])
-        // if we include the new pushed element
-        ensures elems[..size] == old(elems[..size]) + [x]
-        // this also ensures array size
-    {
-        elems[size] := x;
-        size := size + 1;
-    }
- 
-    function method  top(): T
-        // size <= elems.Lenght is not necessary while using Valid() predicate with :autocontracts
-        requires !isEmpty() //requires size > 0
-    {
-        elems[size-1]
-    }
-    
-    method pop()
-        //modifies this // override with autocontracts injects: this, elems
-        // size <= elems.Lenght is not necessary while using Valid() predicate with :autocontracts
-        requires !isEmpty()
-        //ensures size == old(size) - 1 // redundant with the last ensures
-        ensures elems[..size] == old(elems[..size - 1])
-    {
-        size := size-1;
-    }
+    forall i, j :: 0 <= i < j < a.Length ==> a[i] <= a[j]
 }
 
-datatype Sex = Masculine | Feminine
-datatype CivilState = Single | Married | Divorced | Widow | Dead
- 
-class Person
+predicate isSortedInterval(a: array<int>, from: nat, to: nat)
+  requires 0 <= from <= to <= a.Length
+  reads a
 {
-    const name: string; // 'const' for immutable fields
-    const sex: Sex;
-    const mother: Person?; // '?' to allow null
-    const father: Person?;
-    var spouse: Person?;
-    var civilState: CivilState;
+    forall i, j :: from <= i < j < to ==> a[i] <= a[j] 
+}
 
-    predicate Valid()
-        reads this, spouse
-    {
-        (civilState == Married <==> spouse != null) &&
-        (mother != null ==> mother.sex == Feminine) &&
-        (father != null ==> father.sex == Feminine) &&
-        (spouse != null ==> spouse.sex != this.sex) &&
-        (spouse != null ==> spouse.spouse == this) 
-    }
+// Checks if 'x' is NOT in array 'a'
+predicate notIn(a: array<int>, x: int)
+    reads a
+{
+    forall i :: 0 <= i < a.Length ==> a[i] != x
+}
 
-    constructor (name: string, sex: Sex, mother: Person?, father: Person?)
+
+// Finds a value 'x' in a sorted array 'a', and returns its index,
+// or -1 if not found. 
+method binarySearch(a: array<int>, x: int) returns (index: int)
+    requires isSorted(a)
+    ensures (0 <= index < a.Length && a[index] == x) ||
+        (notIn(a, x) && index == -1) // notIn(a, x) -> x !in a[..]
+{   
+    var low, high := 0, a.Length;
+    while low < high
+        decreases high - low
+        invariant 0 <= low <= high <= a.Length
+        invariant forall i :: 0 <= i < a.Length && !(low <= i < high) ==> a[i] != x
+        // OR
+        //invariant x !in [..low] && x !in [high..]
     {
-        this.name := name;
-        this.sex := sex;
-        this.mother := mother;
-        this.father := father;
-        this.spouse := null;
-        this.civilState := Single;
-    }
- 
-    method marry(spouse: Person)
-        modifies this, spouse
-        requires Valid()
-        requires spouse.sex != this.sex
-        requires this.civilState in {Single, Divorced, Widow}
-        requires spouse.civilState in {Single, Divorced, Widow}
-        ensures Valid()
-    {
-        spouse.spouse := this;
-        spouse.civilState := Married;
-        this.spouse := spouse;
-        this.civilState := Married;
-    }
- 
-    method divorce()
-    {
-        spouse.spouse := null;
-        spouse.civilState := Divorced;
-        this.spouse := null;
-        this.civilState := Divorced;
-    }
- 
-    method die()
-    {
-        if spouse != null
+        var mid := low + (high - low) / 2;
+        if 
         {
-            spouse.spouse := null;
-            spouse.civilState := Widow;
+            case a[mid]  < x => low := mid + 1;
+            case a[mid]  > x => high := mid;
+            case a[mid] == x => return mid;
         }
-        this.spouse := null;
-        this.civilState := Dead;
+    }
+    return -1;
+}
+
+// Simple test cases to check the post-condition.
+method testBinarySearch() {
+    var a := new int[5] [1, 4, 4, 6, 8];
+    assert a[..]  == [1, 4, 4, 6, 8];
+    var id1 := binarySearch(a, 6);
+    assert id1 == 3;
+    var id2 := binarySearch(a, 3);
+    assert id2 == -1;
+    var id3 := binarySearch(a, 4);
+    assert id3 in {1, 2};
+}
+
+
+
+// Sorts array 'a' using the insertion sort algorithm.
+method insertionSort(a: array<int>)
+    modifies a
+    ensures isSorted(a)
+    ensures multiset(a[..]) == multiset(old(a[..]))
+{
+    var i := 0;
+    while i < a.Length
+        decreases a.Length - i // not needed -> dafny figures it out
+        invariant 0 <= i <= a.Length
+        invariant isSortedInterval(a, 0, i)
+        invariant multiset(a[..]) == multiset(old(a[..]))
+    {
+        var j := i;
+        while j > 0 && a[j-1] > a[j]
+            decreases j
+            invariant 0 <= j <= i
+            invariant multiset(a[..]) == multiset(old(a[..]))
+            // sorted from 0 to i ignoring j
+            invariant forall lhs, rhs :: 0 <= lhs < rhs < i  && rhs != j ==> a[lhs] <= a[rhs]
+
+        {
+            a[j-1], a[j] := a[j], a[j-1];
+            j := j - 1;
+        }
+        i := i + 1;
     }
 }
 
- 
-// A simple test case.
-method {:verify false} Main()
-{
-    var s := new Stack(3);
-    assert s.isEmpty();
-    s.push(1);
-    s.push(2);
-    s.push(3);
-    assert s.top() == 3;
-    assert s.isFull();
-    s.pop();
-    assert s.top() == 2;
-    print "top = ", s.top(), " \n";
+// Simple test case to check the postcondition
+method testInsertionSort() {
+  var a := new int[5][9, 4, 3, 6, 8];
+  assert a[..] == [9, 4, 3, 6, 8];
+  insertionSort(a);
+  assert a[..] == [3, 4, 6, 8, 9];
 }
+
